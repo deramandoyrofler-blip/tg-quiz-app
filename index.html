@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>GIFTER</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg-color: #0f1218;
+      --card-bg: #181c25;
+      --card-secondary: #212634;
+      --accent-blue: #0088ff;
+      --accent-hover: #0077e6;
+      --text-main: #ffffff;
+      --text-sub: #8a94a6;
+      --border-color: #2a3142;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding-bottom: 80px;
+    }
+
+    /* Экран загрузки */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-color);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    .loader-icon { font-size: 64px; animation: bounce 1.2s infinite ease-in-out; }
+    .loader-bar { width: 140px; height: 4px; background: #222; border-radius: 2px; margin-top: 20px; overflow: hidden; }
+    .loader-progress { width: 0%; height: 100%; background: var(--accent-blue); transition: width 0.3s; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+
+    /* Верхняя панель профиля / баланса */
+    .header {
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .avatar { width: 36px; height: 36px; border-radius: 50%; background: #333; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    .user-meta { display: flex; flex-direction: column; }
+    .user-name { font-size: 14px; font-weight: 600; }
+    .user-id { font-size: 11px; color: var(--text-sub); }
+    
+    .balance-box {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card-secondary);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+
+    /* Навигация страниц */
+    .page { display: none; padding: 16px; }
+    .page.active { display: block; }
+
+    /* Нижнее меню в стиле Telegram Mini App со скриншотов */
+    .nav-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 65px;
+      background: #141821;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 1000;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: var(--text-sub);
+      font-size: 10px;
+      cursor: pointer;
+      position: relative;
+    }
+    .nav-item.active { color: var(--accent-blue); }
+    .nav-icon { font-size: 20px; margin-bottom: 3px; }
+
+    /* Общие стили для карточек */
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      border: 1px solid var(--border-color);
+    }
+    .btn {
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .btn:active { background: var(--accent-hover); }
+
+    /* Рулетка Кейсов */
+    .roulette-container {
+      width: 100%;
+      height: 110px;
+      background: #11141c;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      margin: 15px 0;
+      border: 1px solid var(--border-color);
+    }
+    .pointer {
+      position: absolute;
+      top: 0; bottom: 0; left: 50%;
+      width: 2px; background: var(--accent-blue);
+      z-index: 10; transform: translateX(-50%);
+    }
+    .roulette-track {
+      display: flex;
+      align-items: center;
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      transition: transform 4s cubic-bezier(0.15, 0.9, 0.25, 1);
+    }
+    .item-card {
+      min-width: 90px;
+      height: 90px;
+      background: var(--card-bg);
+      margin: 0 5px;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    /* Игра UPGRADE */
+    .upgrade-wheel {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      border: 6px solid var(--accent-blue);
+      margin: 20px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: bold;
+      position: relative;
+      transition: transform 3s ease-out;
+    }
+
+    /* Админ-панель */
+    .admin-badge {
+      background: #ff3b30;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-left: 5px;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      background: var(--card-secondary);
+      border: 1px solid var(--border-color);
+      color: white;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Заставка (Loader) -->
+  <div id="loader">
+    <div class="loader-icon">🎁</div>
+    <div class="loader-bar"><div class="loader-progress" id="progress"></div></div>
+  </div>
+
+  <!-- Шапка -->
+  <div class="header">
+    <div class="user-info">
+      <div class="avatar" id="user-avatar">U</div>
+      <div class="user-meta">
+        <div class="user-name" id="user-name">Пользователь <span id="admin-tag"></span></div>
+        <div class="user-id">ID: <span id="user-id">...</span></div>
+      </div>
+    </div>
+    <div class="balance-box">
+      <span>💎</span> <span id="user-balance">0</span>
+    </div>
+  </div>
+
+  <!-- СТРАНИЦА 1: ТУРНИРЫ -->
+  <div id="page-tournaments" class="page">
+    <h3>🏆 Турниры</h3>
+    <div class="card">
+      <p style="color: var(--text-sub);">Перерыв между турнирами</p>
+      <h2>00 : 24 : 24</h2>
+    </div>
+    <div class="card">
+      <h4>Победители предыдущего турнира</h4>
+      <p>🥇 Kapzda — 16 152 🏆</p>
+      <p>🥈 hoi1y — 13 498 🏆</p>
+      <p>🥉 wayeto — 13 132 🏆</p>
+    </div>
+  </div>
+
+  <!-- СТРАНИЦА 2: РОЗЫГРЫШИ -->
+  <div id="page-giveaways" class="page">
+    <h3>🎁 Розыгрыши</h3>
+    <div class="card" style="text-align: center;">
+      <p style="color: var(--text-sub);">Сейчас нет активных розыгрышей</p>
+      <p>Следующий розыгрыш через: <strong>00:24:34</strong></p>
+    </div>
+  </div>
+
+  <!-- СТРАНИЦА 3: ИГРАТЬ (Кейсы и Upgrade) -->
+  <div id="page-play" class="page active">
+    <h3>🎲 Кейсы & Upgrade</h3>
+    
+    <!-- Переключатель подрежимов -->
+    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+      <button class="btn" style="flex: 1;" onclick="showGameMode('cases')">Кейсы</button>
+      <button class="btn" style="flex: 1; background: var(--card-secondary);" id="btn-mode-upg" onclick="showGameMode('upgrade')">Upgrade (2X / 10X)</button>
+    </div>
+
+    <!-- РЕЖИМ КЕЙСОВ -->
+    <div id="mode-cases">
+      <div class="roulette-container">
+        <div class="pointer"></div>
+        <div class="roulette-track" id="track"></div>
+      </div>
+      <button class="btn" onclick="spinCase()">Открыть бесплатный кейс 🚀</button>
+    </div>
+
+    <!-- РЕЖИМ UPGRADE -->
+    <div id="mode-upgrade" style="display: none;">
+      <div class="card" style="text-align: center;">
+        <h4>Режим Upgrade</h4>
+        <div class="upgrade-wheel" id="wheel">2X</div>
+        <p>Ставка: 10 💎</p>
+        <button class="btn" onclick="spinUpgrade()">Крутить колесо!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- СТРАНИЦА 4: ЗАДАНИЯ И ПРОМОКОДЫ -->
+  <div id="page-tasks" class="page">
+    <h3>📋 Задания & Промокоды</h3>
+
+    <div class="card">
+      <h4>Активация промокода</h4>
+      <input type="text" id="promo-input" placeholder="Введите промокод">
+      <button class="btn" onclick="activatePromo()" style="margin-top: 6px;">Активировать</button>
+    </div>
+
+    <div class="card">
+      <h4>Пригласи 5 друзей</h4>
+      <p style="color: var(--text-sub); font-size: 13px;">Получи 50 💎 за каждого активного друга</p>
+      <button class="btn" onclick="refLink()">Скопировать реф. ссылку</button>
+    </div>
+  </div>
+
+  <!-- СТРАНИЦА 5: ПРОФИЛЬ & ПОПОЛНЕНИЕ & АДМИНКА -->
+  <div id="page-profile" class="page">
+    <h3>👤 Профиль</h3>
+    
+    <div class="card">
+      <h4>Пополнение баланса</h4>
+      <button class="btn" onclick="depositStars()" style="background: #e6a100; margin-bottom: 8px;">Пополнить через ⭐ Telegram Stars</button>
+      <button class="btn" style="background: #0098ea;" disabled>CryptoBot (Скоро)</button>
+    </div>
+
+    <!-- БЛОК АДМИН-ПАНЕЛИ (виден только ID 7042178706) -->
+    <div class="card" id="admin-panel" style="display: none; border-color: #ff3b30;">
+      <h4>🛠 Админ-Панель (VIP)</h4>
+      <p style="font-size: 12px; color: var(--text-sub);">Выдать баланс пользователю по внутреннему ID</p>
+      <input type="text" id="admin-target-id" placeholder="Внутренний ID пользователя">
+      <input type="number" id="admin-amount" placeholder="Сумма кристаллов 💎">
+      <button class="btn" style="background: #ff3b30;" onclick="adminAddBalance()">Выдать баланс</button>
+
+      <h4 style="margin-top: 15px;">Создать промокод</h4>
+      <input type="text" id="admin-promo-code" placeholder="Код (напр. GIFTER2026)">
+      <input type="number" id="admin-promo-reward" placeholder="Награда 💎">
+      <button class="btn" style="background: #28a745;" onclick="adminCreatePromo()">Создать промокод</button>
+    </div>
+  </div>
+
+  <!-- Нижняя панель навигации -->
+  <div class="nav-bar">
+    <div class="nav-item" onclick="switchPage('tournaments', this)">
+      <div class="nav-icon">🏆</div>
+      <div>Турниры</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('giveaways', this)">
+      <div class="nav-icon">🎁</div>
+      <div>Розыгрыши</div>
+    </div>
+    <div class="nav-item active" onclick="switchPage('play', this)">
+      <div class="nav-icon">🎲</div>
+      <div>Играть</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('tasks', this)">
+      <div class="nav-icon">📋</div>
+      <div>Задания</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('profile', this)">
+      <div class="nav-icon">👤</div>
+      <div>Профиль</div>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    // Системный ID администратора
+    const ADMIN_ID = 7042178706;
+
+    // Данные пользователя по умолчанию
+    let user = {
+      id: tg.initDataUnsafe?.user?.id || 7042178706, // Для тестов
+      name: tg.initDataUnsafe?.user?.first_name || "Akram",
+      balance: 100
+    };
+
+    // База промокодов (в памяти браузера)
+    let promoCodes = JSON.parse(localStorage.getItem('gifter_promos')) || { 'FREE50': 50 };
+
+    // Запуск приложения
+    window.onload = () => {
+      // Имитация загрузки
+      let p = 0;
+      let timer = setInterval(() => {
+        p += 25;
+        document.getElementById('progress').style.width = p + '%';
+        if(p >= 100) {
+          clearInterval(timer);
+          document.getElementById('loader').style.display = 'none';
+        }
+      }, 150);
+
+      // Заполнение профиля
+      document.getElementById('user-id').innerText = user.id;
+      document.getElementById('user-name').innerText = user.name;
+      document.getElementById('user-avatar').innerText = user.name[0];
+      updateBalanceUI();
+
+      // Проверка на админа
+      if(user.id === ADMIN_ID) {
+        document.getElementById('admin-tag').innerHTML = '<span class="admin-badge">ADMIN</span>';
+        document.getElementById('admin-panel').style.display = 'block';
+      }
+
+      initRoulette();
+    };
+
+    function updateBalanceUI() {
+      document.getElementById('user-balance').innerText = user.balance;
+    }
+
+    // Переключение страниц
+    function switchPage(pageName, el) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+      document.getElementById('page-' + pageName).classList.add('active');
+      el.classList.add('active');
+    }
+
+    function showGameMode(mode) {
+      if(mode === 'cases') {
+        document.getElementById('mode-cases').style.display = 'block';
+        document.getElementById('mode-upgrade').style.display = 'none';
+      } else {
+        document.getElementById('mode-cases').style.display = 'none';
+        document.getElementById('mode-upgrade').style.display = 'block';
+      }
+    }
+
+    /* ИГРА: РУЛЕТКА КЕЙСОВ */
+    const items = [
+      { name: 'Кольцо', icon: '💍', val: 100 },
+      { name: 'Кубок', icon: '🏆', val: 500 },
+      { name: 'Торт', icon: '🎂', val: 50 },
+      { name: 'Кристалл', icon: '💎', val: 10 }
+    ];
+
+    function initRoulette() {
+      const track = document.getElementById('track');
+      track.innerHTML = '';
+      for(let i = 0; i < 40; i++) {
+        const item = items[Math.floor(Math.random() * items.length)];
+        const el = document.createElement('div');
+        el.className = 'item-card';
+        el.innerHTML = `<span style="font-size: 28px;">${item.icon}</span><span>${item.name}</span>`;
+        track.appendChild(el);
+      }
+    }
+
+    function spinCase() {
+      const track = document.getElementById('track');
+      const offset = Math.floor(Math.random() * 1000) + 1500;
+      track.style.transform = `translateX(-${offset}px)`;
+      setTimeout(() => {
+        alert('Поздравляем! Вы выиграли подарок 🎂');
+        user.balance += 25;
+        updateBalanceUI();
+      }, 4000);
+    }
+
+    /* ИГРА: UPGRADE */
+    function spinUpgrade() {
+      if(user.balance < 10) { alert('Недостаточно кристаллов!'); return; }
+      user.balance -= 10;
+      updateBalanceUI();
+
+      const wheel = document.getElementById('wheel');
+      const win = Math.random() > 0.5;
+      wheel.style.transform = `rotate(${win ? 720 : 540}deg)`;
+      
+      setTimeout(() => {
+        if(win) {
+          user.balance += 20;
+          alert('Успех! Вы удвоили ставку (2X)!');
+        } else {
+          alert('Неудача! Не повезло в этот раз.');
+        }
+        updateBalanceUI();
+        wheel.style.transform = 'rotate(0deg)';
+      }, 3000);
+    }
+
+    /* АДМИН-ФУНКЦИИ */
+    function adminAddBalance() {
+      const targetId = document.getElementById('admin-target-id').value;
+      const amount = parseInt(document.getElementById('admin-amount').value);
+      if(!targetId || !amount) return alert('Заполните все поля!');
+
+      if(targetId == user.id) {
+        user.balance += amount;
+        updateBalanceUI();
+        alert(`Успешно начислено ${amount} 💎 на ваш баланс!`);
+      } else {
+        alert(`Начислено ${amount} 💎 пользователю ID: ${targetId}`);
+      }
+    }
+
+    function adminCreatePromo() {
+      const code = document.getElementById('admin-promo-code').value.toUpperCase();
+      const reward = parseInt(document.getElementById('admin-promo-reward').value);
+      if(!code || !reward) return alert('Заполните промокод и сумму!');
+
+      promoCodes[code] = reward;
+      localStorage.setItem('gifter_promos', JSON.stringify(promoCodes));
+      alert(`Промокод ${code} на ${reward} 💎 успешно создан!`);
+    }
+
+    function activatePromo() {
+      const code = document.getElementById('promo-input').value.toUpperCase();
+      if(promoCodes[code]) {
+        user.balance += promoCodes[code];
+        updateBalanceUI();
+        alert(`Промокод активирован! +${promoCodes[code]} 💎`);
+        delete promoCodes[code];
+        localStorage.setItem('gifter_promos', JSON.stringify(promoCodes));
+      } else {
+        alert('Промокод недействителен или уже использован!');
+      }
+    }
+
+    /* ПОПОЛНЕНИЕ ЗВЕЗДАМИ */
+    function depositStars() {
+      const data = { action: 'deposit_stars', amount: 50 };
+      tg.sendData(JSON.stringify(data));
+    }
+
+    function refLink() {
+      navigator.clipboard.writeText(`https://t.me/your_bot?start=${user.id}`);
+      alert('Реферальная ссылка скопирована!');
+    }
+  </script>
+</body>
+</html>
